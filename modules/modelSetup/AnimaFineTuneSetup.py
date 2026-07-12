@@ -71,7 +71,8 @@ class AnimaFineTuneSetup(
     ):
         vae_on_train_device = not config.latent_caching
 
-        model.text_encoder_to(self.temp_device if config.latent_caching else self.train_device)
+        text_encoder_on_train_device = config.train_text_encoder_or_embedding() or not config.latent_caching
+        model.text_encoder_to(self.train_device if text_encoder_on_train_device else self.temp_device)
         model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
         model.transformer_to(self.train_device)
 

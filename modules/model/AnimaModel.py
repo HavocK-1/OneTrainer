@@ -181,6 +181,8 @@ class AnimaModel(BaseModel):
             text: str | list[str] = None,
             tokens: Tensor = None,
             tokens_mask: Tensor = None,
+            t5_tokens: Tensor = None,
+            t5_tokens_mask: Tensor = None,
             text_encoder_layer_skip: int = 0,
             text_encoder_dropout_probability: float | None = None,
             text_encoder_output: Tensor = None,
@@ -208,8 +210,14 @@ class AnimaModel(BaseModel):
                 truncation=True,
                 return_tensors="pt",
             )
-            t5_ids = t5_output.input_ids.to(self.text_encoder.device)
-            t5_mask = t5_output.attention_mask.to(self.text_encoder.device)
+            t5_tokens = t5_output.input_ids.to(self.text_encoder.device)
+            t5_tokens_mask = t5_output.attention_mask.to(self.text_encoder.device)
+        elif tokens is not None and t5_tokens is None:
+            # tokens came from the batch but T5 ids were not provided — cannot run the conditioner.
+            raise ValueError(
+                "encode_text requires either raw `text` or both `tokens` and `t5_tokens`. "
+                "The training data pipeline must include 't5_tokens' and 't5_tokens_mask' in the batch."
+            )
 
         if text_encoder_output is None:
             with self.text_encoder_autocast_context:
@@ -222,8 +230,8 @@ class AnimaModel(BaseModel):
                 qwen_hidden = qwen_hidden * tokens_mask.to(qwen_hidden).unsqueeze(-1)
                 text_encoder_output = self.text_conditioner(
                     source_hidden_states=qwen_hidden.to(dtype=self.text_conditioner.dtype),
-                    target_input_ids=t5_ids,
-                    target_attention_mask=t5_mask,
+                    target_input_ids=t5_tokens.to(self.text_conditioner.device),
+                    target_attention_mask=t5_tokens_mask.to(self.text_conditioner.device),
                     source_attention_mask=tokens_mask,
                 )
 
