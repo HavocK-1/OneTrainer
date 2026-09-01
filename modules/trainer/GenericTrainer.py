@@ -844,6 +844,15 @@ class GenericTrainer(BaseTrainer):
             if self.commands.get_stop_command():
                 return
 
+        # The training loop iterates range(0, epochs), so a sample scheduled
+        # at exactly epoch == epochs (e.g., every 3 epochs with 15 total
+        # triggers at epoch 15) is never reached during the loop. Flush any
+        # pending queued samples and do a final sample check here.
+        if not self.commands.get_stop_command():
+            self.__execute_sample_during_training()
+            if self.__needs_sample(train_progress):
+                self.__sample_during_training(train_progress, train_device)
+
     def end(self):
         if self.one_step_trained:
             self.model.evict()
