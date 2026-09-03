@@ -4,6 +4,7 @@ import traceback
 from modules.model.Krea2Model import Krea2Model
 from modules.modelLoader.mixin.HFModelLoaderMixin import HFModelLoaderMixin
 from modules.util.config.TrainConfig import QuantizationConfig
+from modules.util.convert_util import convert, reverse_conversion
 from modules.util.enum.ModelType import ModelType
 from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
@@ -13,10 +14,12 @@ import torch
 from diffusers import (
     AutoencoderKLQwenImage,
     FlowMatchEulerDiscreteScheduler,
-    GGUFQuantizationConfig,
     Krea2Transformer2DModel,
 )
 from transformers import Qwen2Tokenizer, Qwen3VLModel
+
+import accelerate
+from safetensors.torch import load_file
 
 
 class Krea2ModelLoader(
@@ -87,13 +90,8 @@ class Krea2ModelLoader(
             )
 
         if transformer_model_name:
-            transformer = Krea2Transformer2DModel.from_single_file(
-                transformer_model_name,
-                config=base_model_name,
-                subfolder="transformer",
-                #avoid loading the transformer in float32:
-                torch_dtype = torch.bfloat16 if weight_dtypes.transformer.torch_dtype() is None else weight_dtypes.transformer.torch_dtype(),
-                quantization_config=GGUFQuantizationConfig(compute_dtype=torch.bfloat16) if weight_dtypes.transformer.is_gguf() else None,
+            transformer = self.__load_transformer_single_file(
+                model, weight_dtypes, base_model_name, transformer_model_name,
             )
             transformer = self._convert_diffusers_sub_module_to_dtype(
                 transformer, weight_dtypes.transformer, weight_dtypes.train_dtype, quantization,
@@ -114,6 +112,48 @@ class Krea2ModelLoader(
         model.text_encoder = text_encoder
         model.vae = vae
         model.transformer = transformer
+
+    def __load_transformer_single_file(
+            self,
+            model: Krea2Model,
+            weight_dtypes: ModelWeightDtypes,
+            base_model_name: str,
+            transformer_model_name: str,
+    ):
+        # diffusers' Krea2Transformer2DModel is not registered as single-file-loadable (no
+        # from_single_file), so the native Krea 2 checkpoint namespace is converted manually. The
+        # mapping is the reverse of Krea2Model.checkpoint_diffusers_to_original() -- the same
+        # conversion the saver applies when writing ORIGINAL_TRANSFORMER files.
+        if transformer_model_name.endswith(".gguf"):
+            # ponytail: GGUF single-file support stops here; add diffusers' GGUF checkpoint loading when a GGUF Krea 2 transformer is needed
+            raise Exception("GGUF transformer overrides are not supported for Krea 2, use a safetensors file")
+
+        config = Krea2Transformer2DModel.load_config(base_model_name, subfolder="transformer")
+        with accelerate.init_empty_weights():
+            transformer = Krea2Transformer2DModel.from_config(config)
+
+        state_dict = load_file(transformer_model_name)
+        # ComfyUI-style checkpoints carry a "model.diffusion_model." prefix
+        if any(k.startswith("model.diffusion_model.") for k in state_dict):
+            state_dict = {k.removeprefix("model.diffusion_model."): v for k, v in state_dict.items()}
+
+        state_dict = convert(state_dict, reverse_conversion(model.checkpoint_diffusers_to_original()), strict=False)
+
+        #avoid loading the transformer in float32:
+        torch_dtype = weight_dtypes.transformer.torch_dtype()
+        if torch_dtype is None:
+            torch_dtype = torch.bfloat16
+        for key, value in state_dict.items():
+            if value.is_floating_point() and value.dtype != torch_dtype:
+                state_dict[key] = value.to(dtype=torch_dtype)
+
+        missing, unexpected = transformer.load_state_dict(state_dict, strict=False, assign=True)
+        if missing:
+            raise Exception(f"could not load transformer from {transformer_model_name}: missing keys: {missing}")
+        if unexpected:
+            print(f"unexpected keys when loading transformer from {transformer_model_name}: {unexpected}")
+
+        return transformer
 
     def __load_safetensors(
             self,
