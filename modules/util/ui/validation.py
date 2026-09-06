@@ -223,7 +223,7 @@ class BaseFieldValidator(ABC):
                 v = int(value)
             elif declared_type is float:
                 v = float(value)
-                if v < 0:
+                if v < 0 and self.var_name != "noising_bias":
                     return "Value must be non-negative"
             elif declared_type is bool:
                 if value.lower() not in ("true", "false", "0", "1"):
