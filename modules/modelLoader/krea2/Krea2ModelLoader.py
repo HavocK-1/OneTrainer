@@ -128,6 +128,8 @@ class Krea2ModelLoader(
             # ponytail: GGUF single-file support stops here; add diffusers' GGUF checkpoint loading when a GGUF Krea 2 transformer is needed
             raise Exception("GGUF transformer overrides are not supported for Krea 2, use a safetensors file")
 
+        transformer_model_name = self.__resolve_transformer_file(transformer_model_name)
+
         config = Krea2Transformer2DModel.load_config(base_model_name, subfolder="transformer")
         with accelerate.init_empty_weights():
             transformer = Krea2Transformer2DModel.from_config(config)
@@ -154,6 +156,31 @@ class Krea2ModelLoader(
             print(f"unexpected keys when loading transformer from {transformer_model_name}: {unexpected}")
 
         return transformer
+
+    @staticmethod
+    def __resolve_transformer_file(transformer_model_name: str) -> str:
+        # A bare HF repo id ("user/repo") or "repo_id:filename" may point at a single-file
+        # transformer-only repo (e.g. HavocK1/See-Krea-2-Turbo, which holds just one .safetensors
+        # file and no diffusers config). load_file() needs a local path, so resolve via the hub.
+        if os.path.isfile(transformer_model_name):
+            return transformer_model_name
+        import huggingface_hub
+        import re
+        # "repo_id:filename" split; a Windows drive-letter path ("D:\...") also contains ":",
+        # so only split when the left side looks like a HF repo id ("user/repo").
+        match = re.match(r"^([\w.\-]+/[\w.\-]+):(.+)$", transformer_model_name)
+        if match:
+            repo_id, filename = match.group(1), match.group(2)
+            return huggingface_hub.hf_hub_download(repo_id=repo_id, filename=filename)
+        repo_id = transformer_model_name
+        siblings = huggingface_hub.list_repo_files(repo_id)
+        candidates = [f for f in siblings if f.endswith(".safetensors")]
+        if len(candidates) == 1:
+            return huggingface_hub.hf_hub_download(repo_id=repo_id, filename=candidates[0])
+        raise Exception(
+            f"could not resolve transformer file in {repo_id}: expected exactly one .safetensors file, "
+            f"found {candidates}. Use 'repo_id:filename' to pick one."
+        )
 
     def __load_safetensors(
             self,
