@@ -234,7 +234,7 @@ class BaseModelTabView(ABC):
             # text encoder weight dtype
             self.components.label(frame, row, 3, "Text Encoder Data Type",
                              tooltip="The text encoder weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "text_encoder.weight_dtype")
 
             row += 1
@@ -243,7 +243,7 @@ class BaseModelTabView(ABC):
             # text encoder 1 weight dtype
             self.components.label(frame, row, 3, "Text Encoder 1 Data Type",
                              tooltip="The text encoder 1 weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "text_encoder.weight_dtype")
 
             row += 1
@@ -252,7 +252,7 @@ class BaseModelTabView(ABC):
             # text encoder 2 weight dtype
             self.components.label(frame, row, 3, "Text Encoder 2 Data Type",
                              tooltip="The text encoder 2 weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "text_encoder_2.weight_dtype")
 
             row += 1
@@ -261,7 +261,7 @@ class BaseModelTabView(ABC):
             # text encoder 3 weight dtype
             self.components.label(frame, row, 3, "Text Encoder 3 Data Type",
                              tooltip="The text encoder 3 weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "text_encoder_3.weight_dtype")
 
             row += 1
@@ -279,7 +279,7 @@ class BaseModelTabView(ABC):
             # text encoder 4 weight dtype
             self.components.label(frame, row, 3, "Text Encoder 4 Data Type",
                              tooltip="The text encoder 4 weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "text_encoder_4.weight_dtype")
 
             row += 1
@@ -296,7 +296,7 @@ class BaseModelTabView(ABC):
             # vae weight dtype
             self.components.label(frame, row, 3, "VAE Data Type",
                              tooltip="The vae weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True, include_compressed=include_compressed),
                                   ui_state, "vae.weight_dtype")
 
             row += 1
@@ -349,7 +349,7 @@ class BaseModelTabView(ABC):
             # decoder text encoder weight dtype
             self.components.label(frame, row, 3, "Decoder Text Encoder Data Type",
                              tooltip="The decoder text encoder weight data type")
-            self.components.options_kv(frame, row, 4, self.__create_dtype_options(),
+            self.components.options_kv(frame, row, 4, self.__create_dtype_options(include_a8=True),
                                   ui_state, "decoder_text_encoder.weight_dtype")
 
             row += 1
