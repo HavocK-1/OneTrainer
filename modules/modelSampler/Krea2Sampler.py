@@ -101,6 +101,8 @@ class Krea2Sampler(BaseModelSampler):
                 extra_step_kwargs["generator"] = generator
 
             self.model.materialize_only("transformer")
+            if torch.all(text_attention_mask):
+                text_attention_mask = None
             for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
                 latent_model_input = torch.cat([latent_image] * batch_size)
                 expanded_timestep = timestep.expand(batch_size)
