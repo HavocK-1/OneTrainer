@@ -83,7 +83,7 @@ class BaseTrainer(
         )
     def _start_tensorboard(self):
         tensorboard_executable = os.path.join(os.path.dirname(sys.executable), "tensorboard")
-        tensorboard_log_dir = os.path.join(self.config.workspace_dir, "tensorboard")
+        tensorboard_log_dir = os.path.abspath(os.path.join(self.config.workspace_dir, "tensorboard"))
 
         tensorboard_args = [
             tensorboard_executable,
