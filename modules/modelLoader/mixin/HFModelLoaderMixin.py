@@ -263,6 +263,29 @@ class HFModelLoaderMixin(metaclass=ABCMeta):
             shard_index_filename="diffusion_pytorch_model.safetensors.index.json",
         )
 
+    def _resolve_single_file_model(self, model_name: str) -> str:
+        # A bare HF repo id ("user/repo") or "repo_id:filename" may point at a single-file model repo
+        # (e.g. a transformer-only repo holding just one .safetensors file and no diffusers config).
+        # load_file() needs a local path, so resolve via the hub.
+        if os.path.isfile(model_name):
+            return model_name
+        import re
+        # "repo_id:filename" split; a Windows drive-letter path ("D:\...") also contains ":",
+        # so only split when the left side looks like a HF repo id ("user/repo").
+        match = re.match(r"^([\w.\-]+/[\w.\-]+):(.+)$", model_name)
+        if match:
+            repo_id, filename = match.group(1), match.group(2)
+            return huggingface_hub.hf_hub_download(repo_id=repo_id, filename=filename)
+        repo_id = model_name
+        siblings = huggingface_hub.list_repo_files(repo_id)
+        candidates = [f for f in siblings if f.endswith(".safetensors")]
+        if len(candidates) == 1:
+            return huggingface_hub.hf_hub_download(repo_id=repo_id, filename=candidates[0])
+        raise Exception(
+            f"could not resolve model file in {repo_id}: expected exactly one .safetensors file, "
+            f"found {candidates}. Use 'repo_id:filename' to pick one."
+        )
+
     def __convert_sub_module_to_dtype(
             self,
             sub_module: nn.Module,
