@@ -84,6 +84,7 @@ class GenericTrainer(BaseTrainer):
         self.model = None
         self.one_step_trained = False
         self.grad_hook_handles = []
+        self.__nonfinite_grad_count = 0
 
     def start(self):
         if multi.is_master():
@@ -557,6 +558,24 @@ class GenericTrainer(BaseTrainer):
             "update_step", self.config.gradient_accumulation_steps, TimeUnit.STEP, train_progress, start_at_zero=False
         )
 
+    def __skip_nonfinite_grads(self, parameters) -> int:
+        # A NaN/Inf gradient poisons the parameter update (NaN * 0 = NaN, even at lr=0 during
+        # warmup), which makes the loss NaN on the next step and aborts training. Drop such
+        # gradients instead, so a single bad step does not kill the run.
+        skipped = 0
+        for p in parameters:
+            g = p.grad
+            if g is not None and not torch.isfinite(g).all():
+                p.grad = None
+                skipped += 1
+        if skipped > 0:
+            self.__nonfinite_grad_count += skipped
+            tqdm.write(
+                f"Warning: dropped {skipped} parameter gradient(s) containing NaN/Inf "
+                f"({self.__nonfinite_grad_count} total)"
+            )
+        return skipped
+
     def __apply_fused_back_pass(self, scaler):
         fused_optimizer_step = self.config.optimizer.optimizer.supports_fused_back_pass() and self.config.optimizer.fused_back_pass
         fused_reduce = self.config.multi_gpu and self.config.fused_gradient_reduce
@@ -575,6 +594,8 @@ class GenericTrainer(BaseTrainer):
                 if parameter.requires_grad:
                     if scaler:
                         def __optimizer_step(tensor: Tensor, param_group=param_group, i=i):
+                            if self.__skip_nonfinite_grads([tensor]) > 0:
+                                return
                             scaler.unscale_parameter_(tensor, self.model.optimizer)
                             if self.config.clip_grad_norm is not None:
                                 nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
@@ -582,6 +603,8 @@ class GenericTrainer(BaseTrainer):
                             tensor.grad = None
                     else:
                         def __optimizer_step(tensor: Tensor, param_group=param_group, i=i):
+                            if self.__skip_nonfinite_grads([tensor]) > 0:
+                                return
                             if self.config.clip_grad_norm is not None:
                                 nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
                             self.model.optimizer.step_parameter(tensor, param_group, i)
@@ -768,6 +791,7 @@ class GenericTrainer(BaseTrainer):
                     accumulated_loss += detached_loss
 
                     if self.__is_update_step(train_progress):
+                        self.__skip_nonfinite_grads(self.parameters)
                         if self.config.fused_gradient_reduce:
                             multi.finish_async(self.config.gradient_reduce_precision)
                         else:
