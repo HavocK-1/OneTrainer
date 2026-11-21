@@ -233,6 +233,11 @@ class BaseModelSetup(
         if model is not None:
             train_model_part = config.train and \
                                not self.__stop_model_part_training_elapsed(unique_name, config, train_progress)
+            if train_model_part and any(not p.is_floating_point() for p in model.parameters()):
+                raise NotImplementedError(
+                    "Quantized weight dtypes (int8/fp8 W8A8, GGUF, ...) cannot be used for full finetuning. "
+                    "Set the model part's weight dtype to a floating point dtype, or use LoRA training."
+                )
             model.requires_grad_(train_model_part)
 
             #even if frozen parameters are not passed to the optimizer, required_grad has to be False.
