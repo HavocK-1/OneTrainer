@@ -206,10 +206,13 @@ class MossModel(BaseModel):
         return (text_encoder_output, bool_attention_mask)
 
     def scale_latents(self, latents: Tensor) -> Tensor:
-        # the FLUX.2 VAE emits 32-channel latents at 1/8 image scale, but the transformer
-        # consumes a 2x2-packed 128-channel latent at 1/16 scale, normalized with the VAE's
-        # batch-norm running statistics (its bn has 128 channels - one per packed channel).
-        # Pack the 2x2 spatial blocks into 4x channels, then normalize in packed space.
+        # the FLUX.2 VAE emits 32-channel latents at 1/8 image scale as (B, C, 1, H, W), but the
+        # transformer consumes a 2x2-packed 128-channel latent at 1/16 scale as (B, 128, H/2, W/2),
+        # normalized with the VAE's batch-norm running statistics (its bn has 128 channels - one
+        # per packed channel). Pack the 2x2 spatial blocks into 4x channels, then normalize in
+        # packed space.
+        if latents.ndim == 5:
+            latents = latents.squeeze(2)
         b, c, h, w = latents.shape
         packed = latents.view(b, c, h // 2, 2, w // 2, 2).permute(0, 1, 3, 5, 2, 4).reshape(b, c * 4, h // 2, w // 2)
         bn = self.vae.bn
@@ -219,15 +222,17 @@ class MossModel(BaseModel):
         return (packed - mean) / std
 
     def unscale_latents(self, latents: Tensor) -> Tensor:
-        # reverse of scale_latents: denormalize in packed 128-channel space, then unpack
-        # the 2x2 blocks back to 32 channels at 2x spatial resolution for the VAE decoder.
+        # reverse of scale_latents: denormalize in packed 128-channel space, unpack the 2x2
+        # blocks back to 32 channels at 2x spatial resolution, and restore the VAE's
+        # (B, C, 1, H, W) layout for the decoder.
         b, c, h, w = latents.shape
         bn = self.vae.bn
         eps = self.vae.config.batch_norm_eps
         mean = bn.running_mean.to(device=latents.device, dtype=latents.dtype).view(1, -1, 1, 1)
         std = (bn.running_var + eps).sqrt().to(device=latents.device, dtype=latents.dtype).view(1, -1, 1, 1)
         denormed = latents * std + mean
-        return denormed.view(b, c // 4, 2, 2, h, w).permute(0, 1, 4, 2, 5, 3).reshape(b, c // 4, 2 * h, 2 * w)
+        unpacked = denormed.view(b, c // 4, 2, 2, h, w).permute(0, 1, 4, 2, 5, 3).reshape(b, c // 4, 2 * h, 2 * w)
+        return unpacked.unsqueeze(2)
 
     def all_embeddings(self) -> list[MossModelEmbedding]:
         return self.additional_embeddings \
