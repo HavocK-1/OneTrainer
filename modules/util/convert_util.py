@@ -264,8 +264,14 @@ def _create_conversion_from_tuple_list(input: list):
 
 def fuse(*tensors):
     # concatenate N split projections along the output dim into one fused tensor, used by the full-model
-    # fusion pre-stage (forward only, so no reverse is needed).
+    # fusion pre-stage.
     return torch.cat(tensors, dim=0)
+
+def unfuse(n: int):
+    # inverse of fuse: split a fused tensor back into its n leaves along the output dim.
+    def split(t):
+        return torch.split(t, t.shape[0] // n, dim=0)
+    return split
 
 def matched_leaf_groups(group_pattern: str, leaf: str, names) -> set[str]:
     # the set of group-identity strings among `names` that match `group_pattern` followed by the literal
@@ -287,7 +293,7 @@ def qkv_fusion(fusion_groups: list) -> list:
     # owns the rename; this stage only collapses the split leaves into the fused name.
     by_group_pattern = {}
     for group_pattern, leaves, fused, _original in fusion_groups:
-        by_group_pattern.setdefault(group_pattern, []).append((list(leaves), fused, fuse))
+        by_group_pattern.setdefault(group_pattern, []).append((list(leaves), fused, fuse, unfuse(len(leaves))))
     return [(group_pattern, group_pattern, rules) for group_pattern, rules in by_group_pattern.items()]
 
 
