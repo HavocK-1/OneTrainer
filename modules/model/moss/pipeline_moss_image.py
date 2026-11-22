@@ -357,8 +357,22 @@ class MOSSImageTransformer(ModelMixin, ConfigMixin):
 class MOSSImageScheduler(FlowMatchEulerDiscreteScheduler):
     """Euler integration using the training project's V2, nearest-grid schedule."""
     @register_to_config
-    def __init__(self, num_train_timesteps=1000, shift=5.0, training_shift=1.0):
-        super().__init__(num_train_timesteps=num_train_timesteps, shift=1.0)
+    def __init__(self, num_train_timesteps=1000, shift=5.0, training_shift=1.0,
+                 use_dynamic_shifting=False, base_shift=0.5, max_shift=1.15,
+                 base_image_seq_len=256, max_image_seq_len=4096, invert_sigmas=False,
+                 shift_terminal=None, use_karras_sigmas=False, use_exponential_sigmas=False,
+                 use_beta_sigmas=False, time_shift_type="exponential", stochastic_sampling=False):
+        # accept and forward the parent's dynamic-shifting keys so they stay in self.config
+        # (from_pretrained drops keys that are not in the __init__ signature)
+        super().__init__(
+            num_train_timesteps=num_train_timesteps, shift=1.0,
+            use_dynamic_shifting=use_dynamic_shifting, base_shift=base_shift, max_shift=max_shift,
+            base_image_seq_len=base_image_seq_len, max_image_seq_len=max_image_seq_len,
+            invert_sigmas=invert_sigmas, shift_terminal=shift_terminal,
+            use_karras_sigmas=use_karras_sigmas, use_exponential_sigmas=use_exponential_sigmas,
+            use_beta_sigmas=use_beta_sigmas, time_shift_type=time_shift_type,
+            stochastic_sampling=stochastic_sampling,
+        )
         self.register_to_config(shift=shift, training_shift=training_shift)
 
     def set_timesteps(self, num_inference_steps=50, device=None):

@@ -234,10 +234,12 @@ class MossModel(BaseModel):
                + ([self.embedding] if self.embedding is not None else [])
 
     def calculate_timestep_shift(self, latent_width: int, latent_height: int):
-        base_seq_len = self.noise_scheduler.config.base_image_seq_len
-        max_seq_len = self.noise_scheduler.config.max_image_seq_len
-        base_shift = self.noise_scheduler.config.base_shift
-        max_shift = self.noise_scheduler.config.max_shift
+        config = self.noise_scheduler.config
+        # some checkpoints name these base__seq_len/max__seq_len instead of base_image_seq_len/max_image_seq_len
+        base_seq_len = config.get("base_image_seq_len", config.get("base__seq_len", 256))
+        max_seq_len = config.get("max_image_seq_len", config.get("max__seq_len", 4096))
+        base_shift = config.get("base_shift", 0.5)
+        max_shift = config.get("max_shift", 1.15)
 
         # the MOSS transformer consumes the VAE latents at full spatial resolution
         # (VAE scale factor 16, 128 channels), so the image sequence length is the
