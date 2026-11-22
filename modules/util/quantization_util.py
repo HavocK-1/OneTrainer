@@ -121,7 +121,8 @@ def __replace_linear_layers(
     if isinstance(parent_module, (nn.ModuleList, nn.Sequential, nn.ModuleDict)):
         for key, module in (parent_module.items() if isinstance(parent_module, nn.ModuleDict) else enumerate(parent_module)):
             if isinstance(module, convert_type):
-                if filters is not None and len(filters) > 0 and not any(f.matches(name_prefix) for f in filters):
+                key_name = key if name_prefix == "" else f"{name_prefix}.{key}"
+                if filters is not None and len(filters) > 0 and not any(f.matches(key_name) for f in filters):
                     continue
 
                 quant_linear = __create_linear_layer(construct_fn, module, copy_parameters)
