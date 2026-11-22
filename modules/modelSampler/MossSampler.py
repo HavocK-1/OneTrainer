@@ -117,7 +117,7 @@ class MossSampler(BaseModelSampler):
             # decode: unscale_latents denormalizes with the VAE's batch-norm statistics and
             # unpacks the 128-channel latents into 32 channels at 2x spatial resolution
             latents = self.model.unscale_latents(latent_image).to(dtype=vae.dtype)
-            image = vae.decode(latents, return_dict=False)[0].squeeze(-3).clamp(-1, 1)
+            image = vae.decode(latents, return_dict=False)[0].clamp(-1, 1)
 
             do_denormalize = [True] * image.shape[0]
             image = image_processor.postprocess(image, output_type='pil', do_denormalize=do_denormalize)

@@ -222,17 +222,15 @@ class MossModel(BaseModel):
         return (packed - mean) / std
 
     def unscale_latents(self, latents: Tensor) -> Tensor:
-        # reverse of scale_latents: denormalize in packed 128-channel space, unpack the 2x2
-        # blocks back to 32 channels at 2x spatial resolution, and restore the VAE's
-        # (B, C, 1, H, W) layout for the decoder.
+        # reverse of scale_latents: denormalize in packed 128-channel space, then unpack
+        # the 2x2 blocks back to 32 channels at 2x spatial resolution for the VAE decoder.
         b, c, h, w = latents.shape
         bn = self.vae.bn
         eps = self.vae.config.batch_norm_eps
         mean = bn.running_mean.to(device=latents.device, dtype=latents.dtype).view(1, -1, 1, 1)
         std = (bn.running_var + eps).sqrt().to(device=latents.device, dtype=latents.dtype).view(1, -1, 1, 1)
         denormed = latents * std + mean
-        unpacked = denormed.view(b, c // 4, 2, 2, h, w).permute(0, 1, 4, 2, 5, 3).reshape(b, c // 4, 2 * h, 2 * w)
-        return unpacked.unsqueeze(2)
+        return denormed.view(b, c // 4, 2, 2, h, w).permute(0, 1, 4, 2, 5, 3).reshape(b, c // 4, 2 * h, 2 * w)
 
     def all_embeddings(self) -> list[MossModelEmbedding]:
         return self.additional_embeddings \
