@@ -139,6 +139,9 @@ class MossModelLoader(
                 state_dict[key] = value.to(dtype=torch_dtype)
 
         missing, unexpected = transformer.load_state_dict(state_dict, strict=False, assign=True)
+        # missing buffers are fine: derived constants (e.g. rope.bands) are recomputed on load
+        param_keys = {k for k, _ in transformer.named_parameters()}
+        missing = [k for k in missing if k in param_keys]
         if missing:
             raise Exception(f"could not load transformer from {transformer_model_name}: missing keys: {missing}")
         if unexpected:
