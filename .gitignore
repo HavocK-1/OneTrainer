@@ -14,6 +14,7 @@ debug*.py
 /training_concepts
 /training_samples
 /training_user_settings
+/Backup-captions/
 /external
 /update.var
 config.json
