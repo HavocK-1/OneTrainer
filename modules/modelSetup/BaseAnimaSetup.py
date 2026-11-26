@@ -20,6 +20,9 @@ from modules.util.TrainProgress import TrainProgress
 import torch
 from torch import Tensor
 
+from diffusers import AttentionBackendName
+from diffusers.models.attention import AttentionModuleMixin
+
 
 class BaseAnimaSetup(
     BaseModelSetup,
@@ -49,6 +52,16 @@ class BaseAnimaSetup(
         self._setup_model_part(model, config, "vae", config.vae)
 
         self._set_attention_backend(model.transformer, config.attention_mechanism, mask=False)
+
+        # AnimaTextConditioner always runs with padded attention masks, which flash-attn 2 rejects
+        # ("attn_mask is not supported for flash-attn 2"). The transformer's set_attention_backend
+        # also sets the global backend, which the conditioner would otherwise inherit. Pin the
+        # conditioner's attention processors to native SDPA (mask-capable) without touching the
+        # global backend, so the transformer keeps using the configured backend.
+        if model.text_conditioner is not None:
+            for module in model.text_conditioner.modules():
+                if isinstance(module, AttentionModuleMixin):
+                    module.processor._attention_backend = AttentionBackendName.NATIVE
 
     def predict(
             self,
